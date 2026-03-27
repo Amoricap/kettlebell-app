@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="Iron Timer"/>
+<meta name="theme-color" content="#F5F7F4"/>
+<title>Iron Timer — Гиревой тренинг</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#F5F7F4;font-family:'DM Sans',system-ui,sans-serif;color:#111827;-webkit-font-smoothing:antialiased}
+button,input{font-family:'DM Sans',system-ui,sans-serif}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:10px}
+#app{min-height:100vh}
+.su{animation:slideUp .35s cubic-bezier(.22,.68,0,1.15) both}
+@keyframes slideUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes floatPulse{0%,100%{box-shadow:0 8px 28px rgba(22,163,74,.22)}50%{box-shadow:0 12px 38px rgba(22,163,74,.38)}}
+/* type scroll no scrollbar */
+.tscroll{display:flex;gap:7px;overflow-x:auto;padding-bottom:3px;scrollbar-width:none}
+.tscroll::-webkit-scrollbar{display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import{createElement as h,useState,useEffect,useRef,useCallback,Fragment}from'https://esm.sh/react@18';
+import{createRoot}from'https://esm.sh/react-dom@18/client';
+
+// ── DATA ──────────────────────────────────────────────────────────────────
+const EL={
+  swing2: {ico:"🔄",name:"Мах двумя руками",cat:"МАХ",muscles:"Ягодицы · ЗПБ · Поясница",
+    steps:["Гиря перед собой в 30 см, ноги чуть шире плеч.","Захват двумя руками, небольшой наклон — спина прямая.","Взрывное разгибание бёдер: гиря летит вперёд до плеч.","Обратный путь — гиря между ног, бёдра назад.","Выдох на взмахе, вдох на опускании."],
+    mistakes:["Приседание вместо тазобедренного шарнира","Тяга руками — работают бёдра","Скруглённая поясница"]},
+  swing1: {ico:"💥",name:"Мах одной рукой",cat:"МАХ",muscles:"Ягодицы · Кор · Косые",
+    steps:["Одной рукой держишь гирю, другая — в сторону.","Техника таза идентична двуручному маху.","Рука — направляющая, не тянет."],
+    mistakes:["Ротация корпуса — плечи ровно","Рука не прямая"]},
+  swingAlt:{ico:"🔀",name:"Мах с перекладыванием",cat:"МАХ",muscles:"Координация · Кор",
+    steps:["Обычный мах одной рукой.","В верхней точке перекладываешь гирю в другую руку.","Поочерёдная работа без остановки."],
+    mistakes:["Слабый захват при передаче","Не хватай далеко от ручки"]},
+  snatch: {ico:"🚀",name:"Рывок",cat:"РЫВОК",muscles:"Всё тело · Плечи · Кор",
+    steps:["Мощный взрыв бёдрами.","Тяни локоть максимально высоко вдоль тела.","«Пробивай» руку сквозь гирю вверху.","Фиксация: рука прямая, бицепс у уха.","Опускание — гиря скользит вниз."],
+    mistakes:["Гиря бьёт по руке — нет пробива","Слабый взрыв = тянешь руками","Нет фиксации вверху"]},
+  highpull:{ico:"☝️",name:"Тяга вверх (Хай-пул)",cat:"РЫВОК",muscles:"Трапеции · Задняя дельта",
+    steps:["Мах одной рукой, но тянешь локоть высоко.","Гиря до уровня лица, локоть выше кисти.","Переходное упражнение к рывку."],
+    mistakes:["Не начинай тягу руками с низа","Гиря не должна уходить далеко"]},
+  clean:  {ico:"⬆️",name:"Подъём на грудь (Клин)",cat:"ТОЛЧОК",muscles:"Всё тело · Предплечья",
+    steps:["Старт как мах: взрыв бёдрами.","Тяни локоть высоко вдоль тела.","Гиря мягко ложится на предплечье — позиция «рэк».","Локоть прижат к корпусу.","Опускание через разворот кисти."],
+    mistakes:["Гиря бьёт по запястью — тяни локоть выше","Не делай curl — не бицепс"]},
+  press:  {ico:"🏋️",name:"Жим стоя",cat:"ТОЛЧОК",muscles:"Дельтовидные · Трицепс · Кор",
+    steps:["Гиря в «рэк»: у плеча, локоть прижат.","Вдох, напряги кор и ягодицы.","Жим строго вверх — рука полностью выпрямлена.","Ухо видно из-за руки.","Медленное опускание."],
+    mistakes:["Прогиб в пояснице — включай пресс","Запястье гнётся"]},
+  pushpress:{ico:"⚡",name:"Толчок (Push Press)",cat:"ТОЛЧОК",muscles:"Ноги · Плечи · Трицепс",
+    steps:["Гиря в «рэк».","Небольшой подсед — разгон снизу.","Взрывное выпрямление ног: импульс в гирю.","Докручиваешь рукой вверху."],
+    mistakes:["Слишком глубокий подсед","Рука жмёт сама — ноги дают импульс"]},
+  goblet: {ico:"🏔️",name:"Гоблет-приседания",cat:"ПРИСЕДАНИЯ",muscles:"Квадрицепс · Ягодицы · Кор",
+    steps:["Держи гирю за «рога» у груди, локти вниз.","Ноги чуть шире плеч, носки на 30°.","Садись глубоко — бёдра ниже колен.","В нижней точке колени толкай локтями.","Вставай, выжимая пол ногами."],
+    mistakes:["Колени внутрь","Корпус падает вперёд"]},
+  frontSq:{ico:"🦿",name:"Фронтальный присед",cat:"ПРИСЕДАНИЯ",muscles:"Квадрицепс · Ягодицы · Спина",
+    steps:["Две гири в «рэк», локти вперёд.","Ноги на ширине плеч, носки наружу.","Приседай вертикально — локти не опускаются.","Вставай взрывно."],
+    mistakes:["Локти падают — гиря вываливается","Поясница округляется"]},
+  deadlift:{ico:"💪",name:"Становая тяга с гирей",cat:"ТЯГИ",muscles:"Ягодицы · ЗПБ · Разгибатели",
+    steps:["Гиря между ног, ноги на ширине плеч.","Бёдра назад, спина прямая.","Захват двумя руками, плечи над гирей.","Толкай пол ногами — не тяни гирю вверх.","Полное разгибание в верхней точке."],
+    mistakes:["Скруглённая поясница — критически опасно","Гиря далеко от тела"]},
+  rdl:    {ico:"🦩",name:"Становая на одной ноге",cat:"ТЯГИ",muscles:"Ягодицы · ЗПБ · Баланс",
+    steps:["Гиря в одной руке, стоишь на одной ноге.","Наклоняешься — корпус и задняя нога в линию.","Возвращаешься, не касаясь ногой пола."],
+    mistakes:["Ротация таза — держи бёдра ровно","Скругление спины"]},
+  row:    {ico:"⚓",name:"Тяга к поясу",cat:"ТЯГИ",muscles:"Широчайшие · Бицепс · Ромбовидные",
+    steps:["Наклон ~45°, свободная рука — упор на колено.","Гиря висит, рука прямая.","Тяни локоть строго вверх и назад.","В верхней точке лопатка сведена.","Медленное опускание."],
+    mistakes:["Ротация корпуса — читинг","Тянуть бицепсом, а не спиной"]},
+  lunge:  {ico:"🦵",name:"Выпад вперёд с гирей",cat:"ВЫПАДЫ",muscles:"Квадрицепс · Ягодицы",
+    steps:["Гиря в одной или обеих руках.","Шаг вперёд — заднее колено почти до пола.","Переднее колено над стопой, не за носок.","Оттолкнись передней ногой и вернись."],
+    mistakes:["Колено уходит внутрь","Наклон корпуса вперёд"]},
+  revLunge:{ico:"↩️",name:"Выпад назад с гирей",cat:"ВЫПАДЫ",muscles:"Ягодицы · Квадрицепс · Кор",
+    steps:["Шаг назад — заднее колено к полу.","Корпус прямой, взгляд вперёд.","Толкнись передней ногой и вернись."],
+    mistakes:["Слишком широкий шаг","Колено падает внутрь"]},
+  tgu:    {ico:"🌙",name:"Турецкий подъём",cat:"ФУНКЦИОНАЛЬНЫЕ",muscles:"Всё тело · Стабилизаторы",
+    steps:["Лёжа, гиря выжата вверх — взгляд на гирю всегда.","Согни ногу со стороны гири.","Поднимись на локоть, затем на кисть.","Бёдра вверх — мост.","Колено свободной ноги назад — выпад.","Поднимись стоя. Гиря над головой.","Возврат — каждый шаг обратно."],
+    mistakes:["Потерять взгляд с гири","Торопиться","Запястье сгибается"]},
+  windmill:{ico:"🌀",name:"Мельница",cat:"ФУНКЦИОНАЛЬНЫЕ",muscles:"Косые · Плечи · Мобильность",
+    steps:["Выжми гирю над головой — взгляд на неё.","Ноги шире плеч, носки под 45°.","Сгибайся в сторону свободной руки — рука по ноге вниз.","Гиря над головой всё время.","Медленно возвращайся."],
+    mistakes:["Сгибаться вперёд, а не в сторону","Нога слегка согнута"]},
+  twist:  {ico:"🌪️",name:"Русский твист",cat:"ПРЕСС",muscles:"Косые · Пресс · Кор",
+    steps:["Сидишь, корпус назад на 45°, колени согнуты.","Гиря в обеих руках перед собой.","Поворачивай весь корпус — гиря касается пола у бедра.","Возврат через центр и в другую сторону."],
+    mistakes:["Крутить только руками","Ноги отрываются от пола"]},
+  plankRow:{ico:"🏗️",name:"Тяга в планке",cat:"ПРЕСС",muscles:"Кор · Широчайшие · Стабилизаторы",
+    steps:["Упор на прямых руках (одна рука на гире).","Тяни гирю к поясу, не вращая корпус.","Опусти и повтори. Меняй руки."],
+    mistakes:["Таз вращается — стопы шире","Провисание поясницы"]},
+  sqPress:{ico:"🔺",name:"Присед + жим над головой",cat:"ПРИСЕДАНИЯ",muscles:"Всё тело · Плечи",
+    steps:["Гиря у груди.","Глубокий присед.","Встаёшь взрывно — импульс в жим.","Выжимаешь гирю над головой вверху."],
+    mistakes:["Не дожидаться полного выпрямления","Наклон вперёд в приседе"]},
+};
+
+const ex=(id,reps,note='')=>({id,reps,note});
+const TYPES=[
+  {id:'intervals',ico:'⏱',lbl:'Интервалы',title:'Интервальная тренировка',formula:'РАБОТА [X сек] → ОТДЫХ [Y сек] → повтор',desc:'Чередование фиксированных отрезков работы и отдыха. Самый гибкий формат. Классика: 30/30, 40/20, 45/15. Чем короче отдых — тем выше нагрузка.'},
+  {id:'emom',ico:'🕐',lbl:'EMOM',title:'EMOM — каждую минуту',formula:'СТАРТ МИНУТЫ → выполни повторения → ОТДЫХ (остаток)',desc:'Every Minute On the Minute. В начале каждой минуты выполняешь заданные повторения — чем быстрее справился, тем больше отдыха. Структура сама регулирует темп.'},
+  {id:'tabata',ico:'🔥',lbl:'Табата',title:'Табата — протокол 20/10',formula:'20 сек РАБОТА → 10 сек ОТДЫХ × 8 раундов = 4 мин',desc:'Протокол доктора Изуми Табата. 8 раундов по 20/10 — итого 4 минуты. Доказано: эффективнее 60 минут обычного кардио. Ключевое: максимальная интенсивность.'},
+  {id:'ladder',ico:'🪜',lbl:'Лесенка',title:'Лесенка — нарастающий объём',formula:'1 повт → 2 → 3 → … → пик → [обратно]',desc:'Повторения нарастают или убывают от подхода к подходу. Незаметно накапливается большой объём. Лесенка 1-2-3-2-1 = 9 суммарных повторений без ощущения одного тяжёлого подхода.'},
+  {id:'amrap',ico:'🔁',lbl:'AMRAP',title:'AMRAP — максимум за время',formula:'Повтори КАК МОЖНО БОЛЬШЕ РАУНДОВ за X минут',desc:'As Many Rounds As Possible. Ставишь таймер на 10–20 минут и делаешь столько кругов, сколько успеешь. Записывай раунды — на следующей тренировке бей рекорд.'},
+  {id:'volume',ico:'📦',lbl:'На объём',title:'Объёмная работа — сила и масса',formula:'ПОДХОД [N повт] → ОТДЫХ [60–120 сек] → следующий',desc:'Классика силового тренинга: фиксированные подходы и повторения с длинным отдыхом. Акцент на качестве каждого повторения. Лучший формат для силы.'},
+  {id:'complex',ico:'⛓',lbl:'Комплекс',title:'Комплекс — гиря не отрывается',formula:'Упр.1 → Упр.2 → Упр.3 → … без опускания гири → отдых',desc:'Несколько упражнений подряд — гиря не касается пола. Убийственная нагрузка на хват, кор и кардио одновременно. Один из самых эффективных форматов.'},
+];
+
+const PROGS=[
+  {id:'i-0a',type:'intervals',level:0,name:'Свинг-старт 30/30',duration:'16 мин',rounds:8,wt:30,rt:30,desc:'Классический вход. Мах + гоблет-приседания. Осваиваем тазобедренный шарнир.',exercises:[ex('swing2','15 повт','Взрыв бёдрами'),ex('goblet','10 повт','')]},
+  {id:'i-0b',type:'intervals',level:0,name:'Нижний блок 40/20',duration:'20 мин',rounds:8,wt:40,rt:20,desc:'Ноги и кор. Простые движения — формируем базу.',exercises:[ex('deadlift','8 повт',''),ex('goblet','10 повт',''),ex('rdl','6 каждой','')]},
+  {id:'i-1a',type:'intervals',level:1,name:'Рывок-интервал 40/20',duration:'20 мин',rounds:10,wt:40,rt:20,desc:'Интервалы 40/20 с рывком. ЧСС 140–160.',exercises:[ex('snatch','8 лево',''),ex('snatch','8 право',''),ex('swing1','10 повт','')]},
+  {id:'i-1b',type:'intervals',level:1,name:'Тяга + жим 45/15',duration:'20 мин',rounds:8,wt:45,rt:15,desc:'Верх тела: тяга и жим. 45 секунд работы — 15 отдыха.',exercises:[ex('row','8 каждой',''),ex('press','5 каждой',''),ex('highpull','8 каждой','')]},
+  {id:'i-2a',type:'intervals',level:2,name:'HIIT — Гиревой удар',duration:'25 мин',rounds:12,wt:40,rt:15,desc:'Интервалы 40/15. Минимальный отдых, максимальная нагрузка.',exercises:[ex('swingAlt','10 повт',''),ex('snatch','5 каждой',''),ex('highpull','8 каждой','')]},
+  {id:'i-2b',type:'intervals',level:2,name:'King Sized Killer',duration:'25 мин',rounds:10,wt:50,rt:10,desc:'Программа Geoff Neupert — только рывок, 50/10.',exercises:[ex('snatch','8 каждой','Смена рук без остановки'),ex('swing1','20 повт','')]},
+  {id:'e-0a',type:'emom',level:0,name:'EMOM Свинг-10',duration:'10 мин',rounds:10,wt:40,rt:20,desc:'10 махов каждую минуту. Первое знакомство с EMOM.',exercises:[ex('swing2','10 повт/мин','Первые 15–20 сек — работа')]},
+  {id:'e-0b',type:'emom',level:0,name:'EMOM Трио',duration:'12 мин',rounds:4,wt:40,rt:20,desc:'3 упражнения, каждое в свою минуту. 4 цикла.',exercises:[ex('swing2','10 повт','Мин 1'),ex('goblet','8 повт','Мин 2'),ex('deadlift','6 повт','Мин 3')]},
+  {id:'e-1a',type:'emom',level:1,name:'EMOM Жиросжигание',duration:'20 мин',rounds:10,wt:40,rt:20,desc:'Нечётные минуты — рывок, чётные — клин+жим.',exercises:[ex('snatch','8 (нечётные)','Чередуй руки'),ex('clean','5+жим (чётные)','Без паузы')]},
+  {id:'e-1b',type:'emom',level:1,name:'EMOM Нижний+верх',duration:'16 мин',rounds:8,wt:40,rt:20,desc:'4 упражнения по минуте — полный круг каждые 4 мин.',exercises:[ex('swing1','10 каждой','Мин 1'),ex('goblet','10 повт','Мин 2'),ex('press','5 каждой','Мин 3'),ex('row','8 каждой','Мин 4')]},
+  {id:'e-2a',type:'emom',level:2,name:'The Giant (4 нед)',duration:'20 мин',rounds:20,wt:50,rt:10,desc:'Программа Пэта Флинна. Клин + жим каждую минуту. +1 повт каждую неделю.',exercises:[ex('clean','3–6 каждой','Нед.1=3, нед.4=6'),ex('press','без паузы','Строго вертикально')]},
+  {id:'e-2b',type:'emom',level:2,name:'EMOM Рывок-20',duration:'20 мин',rounds:20,wt:40,rt:20,desc:'Только рывок — 20 минут EMOM. 5 повт каждой рукой поочерёдно.',exercises:[ex('snatch','5 левой (нечётные)',''),ex('snatch','5 правой (чётные)','')]},
+  {id:'t-0a',type:'tabata',level:0,name:'Табата Свинг',duration:'4–8 мин',rounds:2,wt:20,rt:10,desc:'Один или два блока 20/10×8. Только мах двумя руками.',exercises:[ex('swing2','Макс за 20 сек','8 раундов × 20/10 = 4 мин')]},
+  {id:'t-0b',type:'tabata',level:0,name:'Табата 3 блока',duration:'14 мин',rounds:3,wt:20,rt:10,desc:'3 блока по 4 мин, 1 мин отдыха между блоками.',exercises:[ex('swing2','Блок 1: 20/10×8',''),ex('goblet','Блок 2: 20/10×8',''),ex('deadlift','Блок 3: 20/10×8','')]},
+  {id:'t-1a',type:'tabata',level:1,name:'Табата верх/низ',duration:'16 мин',rounds:4,wt:20,rt:10,desc:'4 блока — чередование нижнего и верхнего тела.',exercises:[ex('goblet','Блок 1',''),ex('press','Блок 2',''),ex('swing1','Блок 3',''),ex('row','Блок 4','')]},
+  {id:'t-1b',type:'tabata',level:1,name:'Табата Рывок',duration:'8 мин',rounds:2,wt:20,rt:10,desc:'2 блока рывка. По руке на блок.',exercises:[ex('snatch','Блок 1: левая',''),ex('snatch','Блок 2: правая','')]},
+  {id:'t-2a',type:'tabata',level:2,name:'Комбо-Табата',duration:'16 мин',rounds:4,wt:20,rt:10,desc:'В каждом блоке чередуются два упражнения через раунд.',exercises:[ex('snatch','Блок 1А',''),ex('swingAlt','Блок 1Б',''),ex('clean','Блок 2А',''),ex('pushpress','Блок 2Б','')]},
+  {id:'t-2b',type:'tabata',level:2,name:'Табата-марафон',duration:'28 мин',rounds:6,wt:20,rt:10,desc:'6 блоков по 4 мин. Полная тренировка в протоколе Табата.',exercises:[ex('swing2','Блок 1',''),ex('snatch','Блок 2',''),ex('goblet','Блок 3',''),ex('press','Блок 4',''),ex('row','Блок 5',''),ex('sqPress','Блок 6','')]},
+  {id:'l-0a',type:'ladder',level:0,name:'Лесенка 1-2-3',duration:'15 мин',rounds:3,wt:60,rt:30,desc:'Восходящая лесенка 1→2→3, отдых — 3 серии.',exercises:[ex('press','1→2→3 каждой (×3)','Отдых 90 сек'),ex('clean','параллельно','')]},
+  {id:'l-0b',type:'ladder',level:0,name:'Движущаяся лесенка',duration:'15 мин',rounds:3,wt:0,rt:0,desc:'Каждый круг добавляй одно упражнение.',exercises:[ex('swing2','Круг 1: 10',''),ex('goblet','Круг 2: + 8',''),ex('deadlift','Круг 3: + 6','')]},
+  {id:'l-1a',type:'ladder',level:1,name:'ROP — Лесенка Павла',duration:'20 мин',rounds:3,wt:60,rt:45,desc:'Rite of Passage (StrongFirst). Пирамида 1→2→3→2→1.',exercises:[ex('press','1→2→3→2→1 каждой','Отдых 45–60 сек'),ex('swing2','10 повт между','Активный отдых')]},
+  {id:'l-1b',type:'ladder',level:1,name:'Лесенка тяги + маха',duration:'18 мин',rounds:3,wt:60,rt:45,desc:'Двойная лесенка: тяга и мах нарастают одновременно.',exercises:[ex('row','1→2→3→2→1 каждой',''),ex('swing1','1→2→3→2→1','')]},
+  {id:'l-2a',type:'ladder',level:2,name:'Убывающая 5-4-3-2-1',duration:'18 мин',rounds:3,wt:60,rt:30,desc:'С 5 начинаешь свежим. К концу усталость нарастает.',exercises:[ex('snatch','5→4→3→2→1 каждой','Макс вес'),ex('press','5→4→3→2→1','')]},
+  {id:'l-2b',type:'ladder',level:2,name:'Волновая лесенка',duration:'20 мин',rounds:4,wt:60,rt:30,desc:'Серии: 3-2-1 / 4-3-2 / 5-4-3 / 3-2-1. Волна нагрузки.',exercises:[ex('clean','Волна: 3-2-1/4-3-2/5-4-3',''),ex('press','Сразу после клина','')]},
+  {id:'a-0a',type:'amrap',level:0,name:'AMRAP-10 Базовый',duration:'10 мин',rounds:0,wt:0,rt:0,desc:'10 минут — делай сколько успеешь кругов. Записывай раунды.',exercises:[ex('swing2','10 повт',''),ex('goblet','8 повт',''),ex('deadlift','6 повт','')]},
+  {id:'a-0b',type:'amrap',level:0,name:'AMRAP-12 Нижнее тело',duration:'12 мин',rounds:0,wt:0,rt:0,desc:'12 минут, только ноги и ягодицы.',exercises:[ex('goblet','10 повт',''),ex('lunge','6 каждой',''),ex('rdl','8 каждой','')]},
+  {id:'a-1a',type:'amrap',level:1,name:'AMRAP-15 Полный круг',duration:'15 мин',rounds:0,wt:0,rt:0,desc:'15 минут, 5 упражнений. Максимум раундов при чистой технике.',exercises:[ex('snatch','5 каждой',''),ex('clean','5 каждой',''),ex('goblet','10 повт',''),ex('row','8 каждой',''),ex('swing2','15 повт','')]},
+  {id:'a-1b',type:'amrap',level:1,name:'Sneaky Anna',duration:'20 мин',rounds:0,wt:0,rt:0,desc:'Классический WOD от Cavemantraining. 4 упражнения, 20 минут.',exercises:[ex('swing1','8 каждой',''),ex('snatch','4 каждой',''),ex('goblet','8 повт',''),ex('plankRow','6 каждой','')]},
+  {id:'a-2a',type:'amrap',level:2,name:'AMRAP-20 Марафон',duration:'20 мин',rounds:0,wt:0,rt:0,desc:'20 минут нон-стоп. Требует аэробной базы и хвата.',exercises:[ex('swingAlt','10 повт',''),ex('snatch','5 каждой',''),ex('clean','3+жим каждой',''),ex('revLunge','6 каждой',''),ex('windmill','3 каждой','')]},
+  {id:'a-2b',type:'amrap',level:2,name:'AMRAP-25 Тотал',duration:'25 мин',rounds:0,wt:0,rt:0,desc:'6 упражнений, 25 минут. Полное гиревое испытание.',exercises:[ex('swing1','10 каждой',''),ex('clean','5 каждой',''),ex('press','5 каждой',''),ex('goblet','10 повт',''),ex('rdl','6 каждой',''),ex('tgu','1 каждой','')]},
+  {id:'v-0a',type:'volume',level:0,name:'Сила с нуля',duration:'25 мин',rounds:4,wt:90,rt:90,desc:'4×8. Длинный отдых 90 сек. Фокус на технике.',exercises:[ex('deadlift','4×8',''),ex('goblet','4×10',''),ex('row','4×8 каждой','')]},
+  {id:'v-0b',type:'volume',level:0,name:'Три движения Павла',duration:'20 мин',rounds:3,wt:90,rt:90,desc:'Три базовых движения по 3 подхода. Минимализм.',exercises:[ex('swing2','3×15',''),ex('goblet','3×10','Задержись внизу 2 сек'),ex('tgu','3×1 каждой','Взгляд на гирю')]},
+  {id:'v-1a',type:'volume',level:1,name:'Сила и масса 5×5',duration:'30 мин',rounds:5,wt:90,rt:90,desc:'5×5. Максимально тяжёлый вес при идеальной технике.',exercises:[ex('clean','5×5 каждой',''),ex('press','5×5 каждой',''),ex('frontSq','4×6','Две гири')]},
+  {id:'v-1b',type:'volume',level:1,name:'Тяга × Жим × Присед',duration:'30 мин',rounds:4,wt:90,rt:90,desc:'Три паттерна: тяга, толчок, присед. 4×8 на каждое.',exercises:[ex('row','4×8 каждой',''),ex('press','4×6 каждой',''),ex('goblet','4×10',''),ex('windmill','3×5 каждой','Медленно')]},
+  {id:'v-2a',type:'volume',level:2,name:'Волновая нагрузка',duration:'35 мин',rounds:6,wt:120,rt:120,desc:'3 тяжёлых (5 повт) + 3 быстрых лёгких (10 повт).',exercises:[ex('clean','3×5тяж/3×10лёг','Волна'),ex('press','3×5 каждой',''),ex('snatch','3×5 каждой','')]},
+  {id:'v-2b',type:'volume',level:2,name:'Total Tension (Павел)',duration:'30 мин',rounds:4,wt:120,rt:60,desc:'Классический StrongFirst. Максимальное напряжение.',exercises:[ex('frontSq','4×5',''),ex('press','4×5 каждой',''),ex('deadlift','4×5',''),ex('plankRow','4×5 каждой','')]},
+  {id:'c-0a',type:'complex',level:0,name:'Комплекс Три',duration:'20 мин',rounds:5,wt:90,rt:90,desc:'3 движения без опускания гири. 5 раундов, отдых 90 сек.',exercises:[ex('deadlift','5 повт','Гиря в руке'),ex('clean','5 повт','Сразу'),ex('press','5 повт','Сразу')]},
+  {id:'c-0b',type:'complex',level:0,name:'Свинг + Гоблет',duration:'15 мин',rounds:5,wt:90,rt:60,desc:'Мах + гоблет-приседания без остановки.',exercises:[ex('swing2','10 повт',''),ex('goblet','8 повт','Из маха')]},
+  {id:'c-1a',type:'complex',level:1,name:'Комплекс Сова (5)',duration:'25 мин',rounds:5,wt:90,rt:90,desc:'5 упражнений подряд без опускания гири.',exercises:[ex('swing1','5',''),ex('clean','5',''),ex('press','5',''),ex('snatch','5',''),ex('revLunge','5 каждой','')]},
+  {id:'c-1b',type:'complex',level:1,name:'Asgard (Caveman)',duration:'20 мин',rounds:4,wt:90,rt:90,desc:'Тяга → клин → присед → жим → рывок.',exercises:[ex('deadlift','3',''),ex('clean','3',''),ex('goblet','3',''),ex('press','3',''),ex('snatch','3','')]},
+  {id:'c-2a',type:'complex',level:2,name:'Комплекс Смерть (6)',duration:'25 мин',rounds:4,wt:120,rt:120,desc:'6 движений без опускания. Убийственный хват и кардио.',exercises:[ex('deadlift','3',''),ex('clean','3',''),ex('press','3',''),ex('snatch','3',''),ex('frontSq','3',''),ex('tgu','1','Финал')]},
+  {id:'c-2b',type:'complex',level:2,name:'Moving Target (Нейперт)',duration:'25 мин',rounds:5,wt:120,rt:90,desc:'Geoff Neupert. Каждую неделю +1 повт. 5-недельный цикл.',exercises:[ex('clean','1→5 за 5 недель',''),ex('press','то же',''),ex('snatch','то же',''),ex('goblet','то же','')]},
+];
+
+// ── CSS vars ──────────────────────────────────────────────────────────────
+const G={bg:'#F5F7F4',card:'#fff',sheet:'#EEF2EC',frost:'rgba(245,247,244,0.9)',
+  g1:'#16A34A',g2:'#15803D',g3:'#DCFCE7',g4:'#BBF7D0',g5:'#86EFAC',
+  t1:'#111827',t2:'#4B5563',t3:'#9CA3AF',t4:'#D1D5DB',line:'rgba(0,0,0,0.07)',
+  work:'#16A34A',workL:'#DCFCE7',rest:'#0891B2',restL:'#CFFAFE'};
+
+// ── Audio ─────────────────────────────────────────────────────────────────
+let _ctx=null;
+function aC(){if(!_ctx)_ctx=new(window.AudioContext||window.webkitAudioContext)();return _ctx;}
+function beep(f,d,v=0.4,dl=0){const c=aC(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=f;o.type='sine';const t=c.currentTime+dl;g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(0.001,t+d);o.start(t);o.stop(t+d);}
+const SFX={start:()=>{beep(523,.08,.4);beep(659,.08,.4,.1);beep(784,.2,.5,.2);},rest:()=>{beep(659,.15,.35);beep(523,.25,.3,.18);},end:()=>{[523,659,784,1047].forEach((f,i)=>beep(f,.28,.45,i*.12));},tick:()=>beep(880,.05,.1)};
+const fmt=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+
+// ── s(tyle) helper ────────────────────────────────────────────────────────
+const s=o=>o;
+
+// ── TechModal ─────────────────────────────────────────────────────────────
+function TechModal({exId,onClose}){
+  const ex=EL[exId];if(!ex)return null;
+  return h('div',{onClick:onClose,style:{position:'fixed',inset:0,background:'rgba(17,24,39,.45)',zIndex:300,display:'flex',alignItems:'flex-end',justifyContent:'center',backdropFilter:'blur(6px)'}},
+    h('div',{onClick:e=>e.stopPropagation(),style:{background:G.card,borderRadius:'24px 24px 0 0',width:'100%',maxWidth:520,maxHeight:'90vh',overflow:'auto',paddingBottom:48}},
+      h('div',{style:{display:'flex',justifyContent:'center',paddingTop:12,marginBottom:4}},h('div',{style:{width:40,height:4,borderRadius:2,background:G.t4}})),
+      h('div',{style:{padding:'16px 22px 0'}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:18}},
+          h('div',{style:{flex:1,paddingRight:12}},
+            h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:10,color:G.g1,marginBottom:7,letterSpacing:1.2,textTransform:'uppercase',fontWeight:500}},ex.cat),
+            h('div',{style:{fontSize:21,fontWeight:700,color:G.t1,marginBottom:4,lineHeight:1.2}},ex.ico+' '+ex.name),
+            h('div',{style:{fontSize:13,color:G.t2}},ex.muscles)
+          ),
+          h('button',{onClick:onClose,style:{width:36,height:36,borderRadius:'50%',background:G.sheet,border:'none',cursor:'pointer',fontSize:17,color:G.t2,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},'✕')
+        ),
+        h('div',{style:{marginBottom:18}},
+          h('div',{style:{fontSize:11,fontWeight:600,color:G.t3,marginBottom:12,letterSpacing:.6,textTransform:'uppercase'}},'Техника выполнения'),
+          ...ex.steps.map((s,i)=>h('div',{key:i,style:{display:'flex',gap:13,marginBottom:11,alignItems:'flex-start'}},
+            h('div',{style:{width:25,height:25,borderRadius:'50%',background:G.g3,color:G.g2,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:600,flexShrink:0,fontFamily:"'DM Mono',monospace"}},i+1),
+            h('div',{style:{fontSize:14,color:G.t1,lineHeight:1.65,paddingTop:3}},s)
+          ))
+        ),
+        h('div',{style:{background:'#FFF7F7',border:'1px solid #FECACA',borderRadius:14,padding:'13px 16px'}},
+          h('div',{style:{fontSize:11,fontWeight:600,color:'#DC2626',marginBottom:9,letterSpacing:.6,textTransform:'uppercase'}},'⚠ Типичные ошибки'),
+          ...ex.mistakes.map((m,i)=>h('div',{key:i,style:{fontSize:13,color:'#991B1B',marginBottom:i<ex.mistakes.length-1?7:0,paddingLeft:12,borderLeft:'2px solid #FECACA',lineHeight:1.5}},'— '+m))
+        )
+      )
+    )
+  );
+}
+
+// ── FloatingTimer ─────────────────────────────────────────────────────────
+function FloatingTimer({state,onResume,onStop}){
+  if(!state)return null;
+  const{timeLeft,phase,workoutName,round,totalRounds}=state;
+  const col=phase==='work'?G.work:G.rest;
+  return h('div',{onClick:onResume,style:{position:'fixed',bottom:90,right:16,zIndex:200,background:G.card,borderRadius:20,border:`2px solid ${col}`,animation:'floatPulse 2s ease-in-out infinite',padding:'11px 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:11,minWidth:195,boxShadow:`0 8px 28px ${col}40`}},
+    h('div',{style:{width:9,height:9,borderRadius:'50%',background:col,flexShrink:0,boxShadow:`0 0 7px ${col}`}}),
+    h('div',{style:{flex:1,minWidth:0}},
+      h('div',{style:{fontSize:9,fontWeight:600,color:col,textTransform:'uppercase',letterSpacing:.8,marginBottom:1,fontFamily:"'DM Mono',monospace"}},(phase==='work'?'Работа':'Отдых')+` · ${round}/${totalRounds}`),
+      h('div',{style:{fontSize:11,color:G.t2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},workoutName)
+    ),
+    h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:21,fontWeight:600,color:G.t1,letterSpacing:-1,flexShrink:0}},fmt(timeLeft)),
+    h('button',{onClick:ev=>{ev.stopPropagation();onStop();},style:{width:26,height:26,borderRadius:'50%',background:G.sheet,border:'none',cursor:'pointer',fontSize:12,color:G.t3,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},'✕')
+  );
+}
+
+// ── TimerScreen ───────────────────────────────────────────────────────────
+function TimerScreen({workout,onExit,onMinimize,setFloating}){
+  const[phase,setPhase]=useState('preview');
+  const[round,setRound]=useState(1);
+  const[timeLeft,setTL]=useState(workout.workTime||30);
+  const[exIdx,setExIdx]=useState(0);
+  const[elapsed,setElap]=useState(0);
+  const[paused,setPaused]=useState(false);
+  const[techEx,setTechEx]=useState(null);
+
+  const exs=workout.exercises.map(ex=>({...ex,lib:EL[ex.id]||{ico:'💪',name:ex.id,steps:[],mistakes:[],muscles:'',cat:''}}));
+  const cur=exs[exIdx%exs.length];
+  const nxt=exs[(exIdx+1)%exs.length];
+  const isWork=phase==='work';
+  const col=isWork?G.work:phase==='rest'?G.rest:G.t3;
+  const colBg=isWork?G.workL:phase==='rest'?G.restL:G.sheet;
+
+  const advance=useCallback(()=>{
+    if(phase==='work'){
+      if(round>=workout.rounds){setPhase('done');SFX.end();return;}
+      setPhase('rest');setTL(workout.restTime||30);setExIdx(i=>i+1);SFX.rest();
+    }else if(phase==='rest'){setRound(r=>r+1);setPhase('work');setTL(workout.workTime||30);SFX.start();}
+  },[phase,round,workout]);
+
+  useEffect(()=>{setFloating({timeLeft,phase,workoutName:workout.name,round,totalRounds:workout.rounds});},[timeLeft,phase,round]);
+  useEffect(()=>{
+    if(phase==='preview'||phase==='done'||paused)return;
+    const iv=setInterval(()=>{setTL(t=>{if(t<=1){advance();return 0;}if(t<=4)SFX.tick();return t-1;});setElap(e=>e+1);},1000);
+    return()=>clearInterval(iv);
+  },[phase,paused,advance]);
+
+  const R=100,circ=2*Math.PI*R;
+  const prog=phase==='work'?1-timeLeft/(workout.workTime||30):phase==='rest'?1-timeLeft/(workout.restTime||30):0;
+
+  if(phase==='done')return h('div',{className:'su',style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'80vh',gap:18,padding:'0 32px',textAlign:'center'}},
+    h('div',{style:{width:76,height:76,borderRadius:'50%',background:G.g3,display:'flex',alignItems:'center',justifyContent:'center',fontSize:38}},'🏆'),
+    h('div',{style:{fontSize:26,fontWeight:700,color:G.t1}},'Готово!'),
+    h('div',{style:{fontSize:14,color:G.t2}},`Время: ${fmt(elapsed)} · ${workout.rounds} раундов`),
+    h('button',{onClick:()=>{setFloating(null);onExit();},style:{background:G.g1,color:'#fff',border:'none',borderRadius:14,padding:'14px 36px',fontSize:15,fontWeight:600,cursor:'pointer'}},'← Назад')
+  );
+
+  return h(Fragment,null,
+    techEx&&h(TechModal,{exId:techEx,onClose:()=>setTechEx(null)}),
+    h('div',{style:{maxWidth:480,margin:'0 auto',padding:'0 20px 100px'}},
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'20px 0 14px'}},
+        h('button',{onClick:onMinimize,style:{background:'none',border:'none',color:G.t2,cursor:'pointer',fontSize:14,fontWeight:500,display:'flex',alignItems:'center',gap:4}},h('span',{style:{fontSize:18}},'‹'),' Свернуть'),
+        h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:12,color:G.t2,fontWeight:500}},`Раунд ${round}/${workout.rounds}`),
+        h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:12,color:G.t3}},fmt(elapsed))
+      ),
+      h('div',{style:{fontSize:18,fontWeight:700,color:G.t1,marginBottom:14}},workout.name),
+      h('div',{style:{display:'flex',gap:4,marginBottom:24}},
+        ...Array.from({length:Math.min(workout.rounds,20)}).map((_,i)=>h('div',{key:i,style:{flex:1,height:4,borderRadius:4,background:i<round-1?G.g1:i===round-1?col:G.t4,transition:'background .35s'}}))
+      ),
+      h('div',{style:{display:'flex',justifyContent:'center',marginBottom:20}},
+        h('div',{style:{position:'relative',width:232,height:232}},
+          h('svg',{width:232,height:232,style:{transform:'rotate(-90deg)'}},
+            h('circle',{cx:116,cy:116,r:R,fill:'none',stroke:G.sheet,strokeWidth:10}),
+            h('circle',{cx:116,cy:116,r:R,fill:'none',stroke:col,strokeWidth:10,strokeDasharray:circ,strokeDashoffset:circ*(1-prog),strokeLinecap:'round',style:{transition:'stroke-dashoffset 1s linear,stroke .4s'}})
+          ),
+          h('div',{style:{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}},
+            h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:500,letterSpacing:2,color:col,marginBottom:4,textTransform:'uppercase'}},phase==='work'?'Работа':phase==='rest'?'Отдых':'Готов?'),
+            h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:58,fontWeight:400,color:G.t1,lineHeight:1,letterSpacing:-2}},phase==='preview'?'GO':fmt(timeLeft))
+          )
+        )
+      ),
+      phase!=='preview'&&h('div',{style:{background:colBg,border:`1.5px solid ${col}30`,borderRadius:18,padding:'14px 17px',marginBottom:11}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+          h('span',{style:{fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:500,letterSpacing:1.2,color:col,textTransform:'uppercase'}},'Сейчас'),
+          h('button',{onClick:()=>setTechEx(cur.id),style:{background:G.card,border:`1px solid ${G.line}`,color:G.t2,fontSize:11,fontWeight:500,padding:'4px 11px',borderRadius:20,cursor:'pointer'}},'Техника ℹ')
+        ),
+        h('div',{style:{fontSize:17,fontWeight:700,color:G.t1,marginBottom:3}},cur.lib.ico+' '+cur.lib.name),
+        h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:500,color:col}},cur.reps)
+      ),
+      phase!=='preview'&&phase!=='done'&&h('div',{style:{background:G.card,border:`1px solid ${G.line}`,borderRadius:13,padding:'10px 15px',marginBottom:20}},
+        h('div',{style:{fontSize:10,fontWeight:600,letterSpacing:.5,color:G.t3,marginBottom:3,textTransform:'uppercase'}},'Следующее'),
+        h('div',{style:{fontSize:13,color:G.t2}},nxt.lib.ico+' '+nxt.lib.name+' — '+nxt.reps)
+      ),
+      h('div',{style:{display:'flex',gap:9,justifyContent:'center',marginBottom:22}},
+        phase==='preview'
+          ?h('button',{onClick:()=>{setPhase('work');setTL(workout.workTime||30);SFX.start();},style:{background:G.g1,color:'#fff',border:'none',borderRadius:15,padding:'15px 46px',fontSize:16,fontWeight:600,cursor:'pointer',boxShadow:'0 4px 18px rgba(22,163,74,.3)'}},'▶ Начать')
+          :h(Fragment,null,
+              h('button',{onClick:()=>setPaused(p=>!p),style:{flex:1,maxWidth:174,background:paused?G.g1:G.card,color:paused?'#fff':G.t2,border:`1px solid ${paused?G.g1:G.line}`,borderRadius:13,padding:'12px 0',fontSize:13,fontWeight:600,cursor:'pointer'}},paused?'▶ Продолжить':'⏸ Пауза'),
+              h('button',{onClick:advance,style:{flex:1,maxWidth:174,background:G.card,color:G.t2,border:`1px solid ${G.line}`,borderRadius:13,padding:'12px 0',fontSize:13,fontWeight:600,cursor:'pointer'}},'⏭ Пропустить')
+            )
+      ),
+      h('div',{style:{fontSize:10,fontWeight:600,letterSpacing:.5,color:G.t3,marginBottom:9,textTransform:'uppercase'}},'Программа'),
+      h('div',{style:{background:G.card,borderRadius:15,border:`1px solid ${G.line}`,overflow:'hidden'}},
+        ...exs.map((ex,i)=>{
+          const isCur=isWork&&i===exIdx%exs.length;
+          return h('div',{key:i,style:{display:'flex',gap:11,alignItems:'center',padding:'11px 15px',borderBottom:i<exs.length-1?`1px solid ${G.line}`:'none',opacity:isCur?1:0.38,transition:'opacity .3s,background .3s',background:isCur?G.g3:'transparent'}},
+            h('div',{style:{width:24,height:24,borderRadius:'50%',background:isCur?G.g1:G.sheet,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:600,color:isCur?'#fff':G.t2,flexShrink:0,fontFamily:"'DM Mono',monospace",transition:'all .3s'}},i+1),
+            h('div',{style:{flex:1}},
+              h('div',{style:{fontSize:13,fontWeight:600,color:G.t1}},ex.lib.ico+' '+ex.lib.name),
+              h('div',{style:{fontSize:11,color:G.t2,marginTop:1}},ex.reps)
+            ),
+            h('button',{onClick:()=>setTechEx(ex.id),style:{background:'none',border:'none',color:G.t3,cursor:'pointer',fontSize:16,padding:'0 3px'}},'ℹ')
+          );
+        })
+      )
+    )
+  );
+}
+
+// ── Home ──────────────────────────────────────────────────────────────────
+function Home({onStart}){
+  const[curType,setCurType]=useState('intervals');
+  const[curLevel,setCurLevel]=useState(-1);
+  const[openCards,setOpenCards]=useState(new Set());
+  const t=TYPES.find(x=>x.id===curType);
+  const progs=PROGS.filter(p=>p.type===curType&&(curLevel===-1||p.level===curLevel));
+  const toggleCard=id=>setOpenCards(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
+  const buildW=p=>({id:p.id,name:p.name,workTime:p.wt||30,restTime:p.rt||30,rounds:p.rounds>0?p.rounds:8,exercises:p.exercises.map(ex=>({id:ex.id,reps:ex.reps,note:ex.note}))});
+  const lvlBg=['#D1FAE5','#FEF3C7','#FEE2E2'],lvlTx=['#065F46','#92400E','#991B1B'],lvlLbl=['🟢 Начинающий','🟡 Средний','🔴 Продвинутый'];
+
+  return h('div',{style:{maxWidth:480,margin:'0 auto',padding:'0 20px 100px'}},
+    h('div',{className:'su',style:{paddingTop:32}},
+      h('div',{style:{display:'inline-flex',alignItems:'center',gap:7,background:G.g3,border:`1px solid ${G.g4}`,borderRadius:20,padding:'5px 13px',marginBottom:16}},
+        h('span',{style:{fontSize:15}},'🏋️'),h('span',{style:{fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:500,letterSpacing:1,color:G.g2,textTransform:'uppercase'}},'Гиревой тренинг')
+      ),
+      h('div',{style:{fontSize:40,fontWeight:700,color:G.t1,letterSpacing:-1.5,lineHeight:.95,marginBottom:13}},'Iron',h('br'),'',h('span',{style:{color:G.g1}},'Timer')),
+      h('div',{style:{fontSize:14,color:G.t2,lineHeight:1.65,marginBottom:26}},'Выбери формат тренировки и запускай.',h('br'),'Таймер работает даже если свернуть экран.')
+    ),
+    // type tabs
+    h('div',{className:'tscroll',style:{marginBottom:16}},
+      ...TYPES.map(tp=>h('button',{key:tp.id,onClick:()=>{setCurType(tp.id);setCurLevel(-1);setOpenCards(new Set());},style:{flexShrink:0,display:'flex',alignItems:'center',gap:7,padding:'8px 14px',borderRadius:20,border:`1px solid ${tp.id===curType?G.g1:G.line}`,background:tp.id===curType?G.g1:G.card,cursor:'pointer',transition:'all .18s'}},
+        h('span',{style:{fontSize:17}},tp.ico),
+        h('span',{style:{fontSize:12,fontWeight:tp.id===curType?600:500,color:tp.id===curType?'#fff':G.t2,whiteSpace:'nowrap'}},tp.lbl)
+      ))
+    ),
+    // info box
+    h('div',{style:{background:G.g3,border:`1px solid ${G.g4}`,borderRadius:17,padding:'14px 17px',marginBottom:16}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:9,marginBottom:8}},
+        h('div',{style:{width:38,height:38,borderRadius:12,background:G.g4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}},t.ico),
+        h('div',{style:{fontSize:15,fontWeight:700,color:G.g2,lineHeight:1.2}},t.title)
+      ),
+      h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:500,color:G.g2,background:G.g4,padding:'4px 11px',borderRadius:20,display:'inline-block',marginBottom:8}},t.formula),
+      h('div',{style:{fontSize:13,color:'#1F4D2B',lineHeight:1.68}},t.desc)
+    ),
+    // level filter
+    h('div',{style:{display:'flex',gap:6,marginBottom:13,flexWrap:'wrap'}},
+      ...[[-1,'Все'],[0,'🟢 Начинающий'],[1,'🟡 Средний'],[2,'🔴 Продвинутый']].map(([l,lbl])=>
+        h('button',{key:l,onClick:()=>setCurLevel(l),style:{padding:'5px 13px',borderRadius:20,fontSize:11,fontWeight:l===curLevel?600:500,border:`1px solid ${l===curLevel?G.g1:G.line}`,background:l===curLevel?G.g1:G.card,color:l===curLevel?'#fff':G.t2,cursor:'pointer',transition:'all .15s'}},lbl)
+      )
+    ),
+    // programs
+    h('div',{style:{display:'flex',flexDirection:'column',gap:9}},
+      ...progs.map(prog=>{
+        const open=openCards.has(prog.id);
+        const meta=[];
+        if(prog.duration)meta.push('⏱ '+prog.duration);
+        if(prog.rounds>0)meta.push('🔁 '+prog.rounds+' раундов');
+        if(prog.wt>0)meta.push('⚡ '+prog.wt+'с / '+prog.rt+'с');
+        meta.push('💪 '+prog.exercises.length+' упр.');
+        return h('div',{key:prog.id,style:{background:G.card,borderRadius:17,border:`1px solid ${G.line}`,overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}},
+          h('div',{style:{padding:'13px 15px 11px'}},
+            h('span',{style:{fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:500,padding:'2px 8px',borderRadius:20,display:'inline-block',marginBottom:5,background:lvlBg[prog.level],color:lvlTx[prog.level]}},lvlLbl[prog.level]),
+            h('div',{style:{fontSize:15,fontWeight:700,color:G.t1,marginBottom:4}},prog.name),
+            h('div',{style:{fontSize:12,color:G.t2,lineHeight:1.5,marginBottom:7}},prog.desc),
+            h('div',{style:{display:'flex',gap:9,flexWrap:'wrap',marginBottom:11}},
+              ...meta.map(m=>h('span',{key:m,style:{fontSize:10,color:G.t3}},m))
+            ),
+            h('div',{style:{display:'flex',gap:7}},
+              h('button',{onClick:()=>onStart(buildW(prog)),style:{flex:1,background:G.g1,color:'#fff',border:'none',borderRadius:11,padding:'11px 0',fontSize:13,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 10px rgba(22,163,74,.22)'}},'▶ Старт'),
+              h('button',{onClick:()=>toggleCard(prog.id),style:{background:G.sheet,color:G.t2,border:'none',borderRadius:11,padding:'11px 13px',fontSize:12,fontWeight:500,cursor:'pointer'}},open?'Скрыть ↑':'Упражнения ↓')
+            )
+          ),
+          open&&h('div',{style:{borderTop:`1px solid ${G.line}`,padding:'9px 15px 13px'}},
+            ...prog.exercises.map((ex,i)=>{
+              const lib=EL[ex.id]||{ico:'💪',name:ex.id};
+              return h('div',{key:i,style:{display:'flex',gap:9,padding:'7px 0',borderBottom:i<prog.exercises.length-1?`1px solid ${G.line}`:'none',alignItems:'flex-start'}},
+                h('div',{style:{width:21,height:21,borderRadius:'50%',background:G.g3,color:G.g2,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:600,flexShrink:0,fontFamily:"'DM Mono',monospace"}},i+1),
+                h('div',{style:{flex:1}},
+                  h('div',{style:{fontSize:13,fontWeight:600,color:G.t1}},lib.ico+' '+lib.name),
+                  h('span',{style:{fontFamily:"'DM Mono',monospace",fontSize:10,color:G.g2,background:G.g3,padding:'1px 7px',borderRadius:8,display:'inline-block',marginTop:2}},ex.reps),
+                  ex.note&&h('div',{style:{fontSize:11,color:G.t3,marginTop:2,fontStyle:'italic'}},ex.note)
+                )
+              );
+            })
+          ),
+          h('div',{style:{height:3,background:`linear-gradient(90deg,${G.g4},transparent)`}})
+        );
+      })
+    )
+  );
+}
+
+// ── Guide ─────────────────────────────────────────────────────────────────
+function Guide(){
+  const[techEx,setTechEx]=useState(null);
+  const[cat,setCat]=useState('ВСЕ');
+  const cats=['ВСЕ',...Array.from(new Set(Object.values(EL).map(e=>e.cat)))];
+  const list=Object.entries(EL).filter(([,v])=>cat==='ВСЕ'||v.cat===cat);
+  return h(Fragment,null,
+    techEx&&h(TechModal,{exId:techEx,onClose:()=>setTechEx(null)}),
+    h('div',{style:{maxWidth:480,margin:'0 auto',padding:'0 20px 100px'}},
+      h('div',{className:'su',style:{paddingTop:30,paddingBottom:20}},
+        h('div',{style:{fontFamily:"'DM Mono',monospace",fontSize:10,fontWeight:500,letterSpacing:1.5,color:G.g1,marginBottom:7,textTransform:'uppercase'}},'Справочник'),
+        h('div',{style:{fontSize:30,fontWeight:700,color:G.t1,letterSpacing:-.5,lineHeight:1.1}},'Техника',h('br'),'',h('span',{style:{color:G.g1}},'упражнений'))
+      ),
+      h('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}},
+        ...cats.map(c=>h('button',{key:c,onClick:()=>setCat(c),style:{padding:'5px 13px',borderRadius:20,fontSize:11,fontWeight:c===cat?600:500,border:`1px solid ${c===cat?G.g1:G.line}`,background:c===cat?G.g1:G.card,color:c===cat?'#fff':G.t2,cursor:'pointer',transition:'all .15s'}},c))
+      ),
+      h('div',{style:{display:'flex',flexDirection:'column',gap:7}},
+        ...list.map(([id,ex])=>h('div',{key:id,onClick:()=>setTechEx(id),style:{display:'flex',alignItems:'center',gap:13,background:G.card,border:`1px solid ${G.line}`,borderRadius:15,padding:'13px 15px',cursor:'pointer',transition:'border-color .18s'},
+          onMouseEnter:e=>e.currentTarget.style.borderColor=G.g5,
+          onMouseLeave:e=>e.currentTarget.style.borderColor=G.line},
+          h('div',{style:{width:42,height:42,borderRadius:13,background:G.g3,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}},ex.ico),
+          h('div',{style:{flex:1}},
+            h('div',{style:{fontSize:13,fontWeight:600,color:G.t1,marginBottom:2}},ex.name),
+            h('div',{style:{fontSize:11,color:G.t2,marginBottom:5}},ex.muscles),
+            h('span',{style:{fontFamily:"'DM Mono',monospace",fontSize:9,fontWeight:500,color:G.g2,background:G.g3,padding:'2px 7px',borderRadius:20}},ex.cat)
+          ),
+          h('div',{style:{color:G.t3,fontSize:19,fontWeight:300}},'›')
+        ))
+      )
+    )
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────
+function App(){
+  const[tab,setTab]=useState('home');
+  const[activeW,setActiveW]=useState(null);
+  const[minimized,setMinimized]=useState(false);
+  const[floating,setFloating]=useState(null);
+
+  const startW=w=>{setActiveW(w);setMinimized(false);setFloating(null);};
+  const stopW=()=>{setActiveW(null);setMinimized(false);setFloating(null);};
+
+  const tabs=[['home','🏠','Главная'],['guide','📖','Техника']];
+  const showMain=!activeW||minimized;
+
+  return h(Fragment,null,
+    minimized&&activeW&&h(FloatingTimer,{state:floating,onResume:()=>setMinimized(false),onStop:stopW}),
+    h('div',{style:{minHeight:'100vh',background:G.bg,paddingBottom:80}},
+      activeW&&!minimized&&h('div',{style:{minHeight:'100vh',background:G.bg}},
+        h(TimerScreen,{workout:activeW,onExit:stopW,onMinimize:()=>setMinimized(true),setFloating})
+      ),
+      h('div',{style:{display:showMain?'block':'none'}},
+        tab==='home'&&h(Home,{onStart:startW}),
+        tab==='guide'&&h(Guide)
+      ),
+      h('div',{style:{position:'fixed',bottom:0,left:0,right:0,zIndex:100}},
+        h('div',{style:{maxWidth:520,margin:'0 auto',background:G.frost,backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',borderTop:`1px solid ${G.line}`,display:'flex',padding:'8px 0 max(8px,env(safe-area-inset-bottom))'}},
+          ...tabs.map(([id,ico,lbl])=>h('button',{key:id,onClick:()=>setTab(id),style:{flex:1,background:'none',border:'none',padding:'8px 0 4px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3}},
+            h('span',{style:{fontSize:21,lineHeight:1,filter:tab===id?'none':'grayscale(.5) opacity(.55)',transition:'filter .2s'}},ico),
+            h('span',{style:{fontSize:11,fontWeight:tab===id?600:400,color:tab===id?G.g1:G.t3,transition:'color .2s'}},lbl)
+          ))
+        )
+      )
+    )
+  );
+}
+
+createRoot(document.getElementById('app')).render(h(App));
+</script>
+</body>
+</html>
